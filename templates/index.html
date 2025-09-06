@@ -603,9 +603,9 @@
         try {
           const [servicesResponse, toggleResponse, diskResponse] =
             await Promise.all([
-              fetch('/api/services'),
-              fetch('/api/toggle-states'),
-              fetch('/api/disk-usage'),
+              fetch('./api/services'),
+              fetch('./api/toggle-states'),
+              fetch('./api/disk-usage'),
             ]);
           services = await servicesResponse.json();
           toggleStates = await toggleResponse.json();
@@ -960,7 +960,7 @@
 
         if (isExpanded) {
           logsContainer.style.display = 'none';
-          await fetch(`/api/services/${serviceName}/toggle`, {
+          await fetch(`./api/services/${serviceName}/toggle`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ toggle_type: 'logs', is_expanded: false }),
@@ -968,7 +968,7 @@
         } else {
           logsContainer.style.display = 'block';
           await loadLogsForService(serviceName);
-          await fetch(`/api/services/${serviceName}/toggle`, {
+          await fetch(`./api/services/${serviceName}/toggle`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ toggle_type: 'logs', is_expanded: true }),
@@ -979,7 +979,7 @@
       async function loadLogsForService(serviceName) {
         const logsContainer = document.getElementById(`logs-${serviceName}`);
         try {
-          const response = await fetch(`/api/services/${serviceName}/logs`);
+          const response = await fetch(`./api/services/${serviceName}/logs`);
           const data = await response.json();
 
           if (data.logs) {
@@ -1026,7 +1026,7 @@
         modal.style.display = 'flex';
 
         try {
-          const response = await fetch(`/api/services/${serviceName}/journal`);
+          const response = await fetch(`./api/services/${serviceName}/journal`);
           const data = await response.json();
 
           if (data.journal) {
@@ -1079,7 +1079,7 @@
 
       async function controlService(serviceName, action) {
         try {
-          const response = await fetch(`/api/services/${serviceName}/control`, {
+          const response = await fetch(`./api/services/${serviceName}/control`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action }),
@@ -1104,7 +1104,7 @@
         }
 
         try {
-          const response = await fetch('/api/services', {
+          const response = await fetch('./api/services', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ service_name: serviceName }),
@@ -1124,7 +1124,7 @@
 
       async function removeService(serviceName) {
         try {
-          const response = await fetch(`/api/services/${serviceName}`, {
+          const response = await fetch(`./api/services/${serviceName}`, {
             method: 'DELETE',
           });
           const result = await response.json();

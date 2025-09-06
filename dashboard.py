@@ -363,8 +363,9 @@ class SystemdDashboard:
 
 
 class DashboardRequestHandler(BaseHTTPRequestHandler):
-    def __init__(self, *args, dashboard_instance=None, **kwargs):
+    def __init__(self, *args, dashboard_instance=None, base_url="/", **kwargs):
         self.dashboard = dashboard_instance
+        self.base_url = base_url.rstrip('/')
         super().__init__(*args, **kwargs)
 
     def log_message(self, format, *args):
@@ -374,6 +375,10 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
         parsed_path = urllib.parse.urlparse(self.path)
         path = parsed_path.path
         query_params = urllib.parse.parse_qs(parsed_path.query)
+
+        # Strip base_url from path if present
+        if self.base_url and path.startswith(self.base_url):
+            path = path[len(self.base_url):] or "/"
 
         if path == "/":
             self._serve_template()
@@ -396,6 +401,10 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         parsed_path = urllib.parse.urlparse(self.path)
         path = parsed_path.path
+
+        # Strip base_url from path if present
+        if self.base_url and path.startswith(self.base_url):
+            path = path[len(self.base_url):] or "/"
 
         content_length = int(self.headers.get("Content-Length", 0))
         post_data = self.rfile.read(content_length).decode("utf-8")
@@ -422,6 +431,10 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
     def do_DELETE(self):
         parsed_path = urllib.parse.urlparse(self.path)
         path = parsed_path.path
+
+        # Strip base_url from path if present
+        if self.base_url and path.startswith(self.base_url):
+            path = path[len(self.base_url):] or "/"
 
         if path.startswith("/api/services/") and len(path.split("/")) == 4:
             service_name = path.split("/")[3]
@@ -539,10 +552,10 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
 
-def create_handler(dashboard_instance):
+def create_handler(dashboard_instance, base_url="/"):
     def handler(*args, **kwargs):
         return DashboardRequestHandler(
-            *args, dashboard_instance=dashboard_instance, **kwargs
+            *args, dashboard_instance=dashboard_instance, base_url=base_url, **kwargs
         )
 
     return handler
@@ -560,7 +573,7 @@ if __name__ == "__main__":
     db_path = os.path.join(args.config_dir, "services.db")
     dashboard = SystemdDashboard(db_path)
 
-    handler_class = create_handler(dashboard)
+    handler_class = create_handler(dashboard, args.base_url)
     httpd = HTTPServer((args.host, args.port), handler_class)
 
     print(f"Starting server on {args.host}:{args.port}")
