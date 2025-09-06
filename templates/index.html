@@ -1,0 +1,1146 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Systemd Dashboard</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        margin: 0;
+        padding: 20px;
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        min-height: 100vh;
+      }
+      .container {
+        max-width: 1400px;
+        margin: 0 auto;
+      }
+      h1 {
+        color: #2c3e50;
+        margin-bottom: 30px;
+        font-size: 28px;
+        font-weight: 700;
+      }
+
+      .service-card {
+        background: white;
+        border: none;
+        border-left: 4px solid #e9ecef;
+        border-radius: 8px;
+        margin: 12px 0;
+        padding: 0;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        transition: all 0.3s ease;
+        overflow: hidden;
+      }
+      .service-card:hover {
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+        transform: translateY(-2px);
+      }
+      .service-card.active {
+        border-left-color: #10b981;
+      }
+      .service-card.inactive {
+        border-left-color: #ef4444;
+      }
+      .service-card.unknown {
+        border-left-color: #6b7280;
+      }
+
+      .service-header {
+        padding: 16px 20px 12px;
+        border-bottom: 1px solid #f1f5f9;
+      }
+      .service-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 8px;
+      }
+      .service-name {
+        font-size: 18px;
+        font-weight: 700;
+        color: #1e293b;
+        margin: 0;
+      }
+      .service-status {
+        padding: 6px 14px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: capitalize;
+      }
+      .status-active {
+        background: #dcfce7;
+        color: #16a34a;
+      }
+      .status-inactive {
+        background: #fef2f2;
+        color: #dc2626;
+      }
+      .status-unknown {
+        background: #f1f5f9;
+        color: #64748b;
+      }
+
+      .service-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 16px;
+        padding: 14px 20px;
+        background: #fafbfc;
+        border-bottom: 1px solid #f1f5f9;
+      }
+      .stat-item {
+        text-align: center;
+      }
+      .stat-label {
+        font-size: 11px;
+        color: #64748b;
+        text-transform: uppercase;
+        font-weight: 600;
+        letter-spacing: 0.8px;
+        margin-bottom: 6px;
+      }
+      .stat-value {
+        font-size: 15px;
+        font-weight: 600;
+        color: #1e293b;
+      }
+      .stat-value.highlight {
+        color: #10b981;
+      }
+
+      .service-actions {
+        padding: 16px 20px;
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .action-group {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .action-group:not(:last-child)::after {
+        content: '';
+        width: 1px;
+        height: 20px;
+        background: #e2e8f0;
+        margin-left: 10px;
+      }
+
+      .btn {
+        padding: 8px 12px;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 600;
+        transition: all 0.2s ease;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      }
+      .btn:active {
+        transform: translateY(0);
+      }
+      .btn-start {
+        background: #10b981;
+        color: white;
+      }
+      .btn-start:hover {
+        background: #059669;
+      }
+      .btn-stop {
+        background: #ef4444;
+        color: white;
+      }
+      .btn-stop:hover {
+        background: #dc2626;
+      }
+      .btn-restart {
+        background: #f59e0b;
+        color: white;
+      }
+      .btn-restart:hover {
+        background: #d97706;
+      }
+      .btn-secondary {
+        background: #64748b;
+        color: white;
+      }
+      .btn-secondary:hover {
+        background: #475569;
+      }
+      .btn-outline {
+        background: white;
+        color: #64748b;
+        border: 1px solid #e2e8f0;
+      }
+      .btn-outline:hover {
+        background: #f8fafc;
+        border-color: #cbd5e1;
+      }
+      .btn-danger-outline {
+        background: white;
+        color: #ef4444;
+        border: 1px solid #fecaca;
+      }
+      .btn-danger-outline:hover {
+        background: #fef2f2;
+        border-color: #fca5a5;
+      }
+
+      .logs-container {
+        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        color: #e2e8f0;
+        padding: 16px;
+        font-family:
+          'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas,
+          'Courier New', monospace;
+        font-size: 13px;
+        max-height: 400px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+        display: none;
+        border-radius: 0 0 8px 8px;
+        border-top: 1px solid #334155;
+      }
+      .logs-container::-webkit-scrollbar {
+        width: 8px;
+      }
+      .logs-container::-webkit-scrollbar-track {
+        background: #1e293b;
+      }
+      .logs-container::-webkit-scrollbar-thumb {
+        background: linear-gradient(180deg, #64748b, #475569);
+        border-radius: 4px;
+      }
+      .logs-container::-webkit-scrollbar-thumb:hover {
+        background: linear-gradient(180deg, #475569, #334155);
+      }
+
+      .log-line {
+        margin: 0;
+        line-height: 1.1;
+        padding: 1px 4px;
+        border-radius: 1px;
+        font-size: 11px;
+        display: flex;
+        align-items: center;
+        transition: background-color 0.2s ease;
+        border-left: 2px solid transparent;
+      }
+
+      .log-line:hover {
+        background-color: rgba(255, 255, 255, 0.03);
+      }
+
+      .log-line.log-error {
+        border-left-color: #ef4444;
+        background-color: rgba(239, 68, 68, 0.05);
+      }
+
+      .log-line.log-warning {
+        border-left-color: #f59e0b;
+        background-color: rgba(245, 158, 11, 0.05);
+      }
+
+      .log-line.log-success {
+        border-left-color: #10b981;
+        background-color: rgba(16, 185, 129, 0.05);
+      }
+
+      .log-line.log-debug {
+        border-left-color: #8b5cf6;
+        background-color: rgba(139, 92, 246, 0.05);
+      }
+
+      .log-line.log-notice {
+        border-left-color: #3b82f6;
+        background-color: rgba(59, 130, 246, 0.05);
+      }
+
+      .log-line.log-info {
+        border-left-color: #64748b;
+        background-color: rgba(100, 116, 139, 0.03);
+      }
+
+      .log-timestamp {
+        color: #94a3b8;
+        font-weight: 500;
+        font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+        margin-right: 6px;
+        min-width: 60px;
+        flex-shrink: 0;
+        font-size: 9px;
+        background: rgba(148, 163, 184, 0.06);
+        padding: 0px 3px;
+        border-radius: 1px;
+      }
+
+      .log-priority {
+        font-weight: 600;
+        font-size: 7px;
+        margin-right: 4px;
+        width: 25px;
+        flex-shrink: 0;
+        text-align: center;
+        border-radius: 1px;
+        padding: 0px 1px;
+        letter-spacing: 0.2px;
+      }
+
+      .log-line.log-error .log-priority {
+        color: #fef2f2;
+        background: #ef4444;
+      }
+
+      .log-line.log-warning .log-priority {
+        color: #fffbeb;
+        background: #f59e0b;
+      }
+
+      .log-line.log-success .log-priority {
+        color: #ecfdf5;
+        background: #10b981;
+      }
+
+      .log-line.log-debug .log-priority {
+        color: #f3f4f6;
+        background: #8b5cf6;
+      }
+
+      .log-line.log-notice .log-priority {
+        color: #eff6ff;
+        background: #3b82f6;
+      }
+
+      .log-line.log-info .log-priority {
+        color: #f8fafc;
+        background: #64748b;
+      }
+
+      .log-service {
+        color: #60a5fa;
+        font-weight: 600;
+        margin-right: 6px;
+        min-width: 70px;
+        flex-shrink: 0;
+        font-size: 10px;
+        font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+      }
+
+      .log-message {
+        color: #e2e8f0;
+        flex: 1;
+        word-break: break-word;
+        line-height: 1.1;
+        font-size: 11px;
+      }
+
+      .add-service {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      }
+      .add-service h3 {
+        margin: 0 0 12px 0;
+        color: #1e293b;
+        font-size: 16px;
+        font-weight: 600;
+      }
+      .input-group {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+      }
+      .add-service input {
+        flex: 1;
+        padding: 12px 16px;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        font-size: 14px;
+        transition: border-color 0.2s;
+      }
+      .add-service input:focus {
+        outline: none;
+        border-color: #10b981;
+        box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+      }
+
+      .loading {
+        text-align: center;
+        padding: 40px;
+        color: #64748b;
+      }
+      .modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(4px);
+      }
+      .modal-content {
+        background-color: white;
+        margin: 5% auto;
+        padding: 0;
+        border-radius: 12px;
+        width: 95%;
+        max-width: 1400px;
+        max-height: 80%;
+        overflow: hidden;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      }
+      .modal-header {
+        padding: 20px 24px;
+        border-bottom: 1px solid #f1f5f9;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .modal-header h2 {
+        margin: 0;
+        color: #1e293b;
+        font-size: 20px;
+        font-weight: 600;
+      }
+      .close {
+        color: #64748b;
+        font-size: 24px;
+        font-weight: bold;
+        cursor: pointer;
+        padding: 4px;
+        border-radius: 4px;
+        transition: all 0.2s;
+      }
+      .close:hover {
+        color: #1e293b;
+        background: #f1f5f9;
+      }
+      #journal-content {
+        margin: 0;
+        border-radius: 0;
+        max-height: 60vh;
+        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        border: none;
+      }
+
+      .disk-usage-card {
+        background: white;
+        border: none;
+        border-left: 4px solid #3b82f6;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        padding: 16px 20px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      }
+      .disk-usage-title {
+        font-size: 14px;
+        font-weight: 700;
+        color: #1e293b;
+        margin: 0 0 12px 0;
+      }
+      .disk-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+      }
+      .disk-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .disk-info {
+        flex: 1;
+        min-width: 0;
+      }
+      .disk-path {
+        font-size: 12px;
+        font-weight: 600;
+        color: #1e293b;
+        font-family: monospace;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .disk-usage-compact {
+        font-size: 11px;
+        color: #64748b;
+        margin-top: 2px;
+      }
+      .disk-usage-bar {
+        width: 60px;
+        height: 6px;
+        background: #f1f5f9;
+        border-radius: 3px;
+        overflow: hidden;
+        flex-shrink: 0;
+      }
+      .disk-usage-fill {
+        height: 100%;
+        border-radius: 3px;
+        transition: width 0.3s ease;
+      }
+      .usage-low {
+        background: #10b981;
+      }
+      .usage-medium {
+        background: #f59e0b;
+      }
+      .usage-high {
+        background: #ef4444;
+      }
+      .usage-critical {
+        background: #dc2626;
+      }
+
+      @media (max-width: 768px) {
+        .service-stats {
+          grid-template-columns: repeat(2, 1fr);
+          gap: 16px;
+        }
+        .service-actions {
+          flex-direction: column;
+          align-items: stretch;
+        }
+        .action-group {
+          justify-content: center;
+        }
+        .action-group:not(:last-child)::after {
+          display: none;
+        }
+        .disk-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Systemd Dashboard</h1>
+
+      <div class="disk-usage-card">
+        <h3 class="disk-usage-title">💾 Disk Usage</h3>
+        <div id="disk-usage-container" class="disk-grid">
+          <div style="text-align: center; color: #64748b; font-size: 12px">
+            Loading...
+          </div>
+        </div>
+      </div>
+
+      <div class="add-service">
+        <h3>Add Service to Track</h3>
+        <div class="input-group">
+          <input
+            type="text"
+            id="new-service"
+            placeholder="Service name (e.g., nginx, sshd)"
+            onkeypress="if(event.key==='Enter') addService()"
+          />
+          <button class="btn btn-start" onclick="addService()">+ Add</button>
+        </div>
+      </div>
+
+      <div id="loading" class="loading">Loading services...</div>
+      <div id="services-container"></div>
+    </div>
+
+    <div id="journal-modal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 id="journal-title">Full Journal</h2>
+          <div>
+            <button
+              class="btn btn-outline"
+              onclick="scrollJournalToTop()"
+              title="Go to top"
+            >
+              ↑ Top
+            </button>
+            <button
+              class="btn btn-outline"
+              onclick="scrollJournalToBottom()"
+              title="Go to bottom"
+            >
+              ↓ Bottom
+            </button>
+            <span class="close" onclick="closeJournalModal()">&times;</span>
+          </div>
+        </div>
+        <div
+          id="journal-content"
+          class="logs-container"
+          style="display: block"
+        ></div>
+      </div>
+    </div>
+
+    <script>
+      let services = [];
+      let toggleStates = {};
+      let diskUsage = [];
+
+      async function loadServices() {
+        try {
+          const [servicesResponse, toggleResponse, diskResponse] =
+            await Promise.all([
+              fetch('/api/services'),
+              fetch('/api/toggle-states'),
+              fetch('/api/disk-usage'),
+            ]);
+          services = await servicesResponse.json();
+          toggleStates = await toggleResponse.json();
+          diskUsage = await diskResponse.json();
+          renderServices();
+          renderDiskUsage();
+        } catch (error) {
+          console.error('Error loading data:', error);
+          document.getElementById('loading').innerHTML = 'Error loading data';
+        }
+      }
+
+      function renderServices() {
+        const container = document.getElementById('services-container');
+        const loading = document.getElementById('loading');
+
+        if (services.length === 0) {
+          container.innerHTML =
+            '<div style="text-align: center; padding: 40px; color: #64748b;"><h3>No services tracked yet</h3><p>Add a service above to get started</p></div>';
+          loading.style.display = 'none';
+          return;
+        }
+
+        container.innerHTML = services
+          .map((service) => {
+            const isLogsExpanded = toggleStates[service.name]?.logs || false;
+            const statusClass = service.active
+              ? 'active'
+              : service.state === 'unknown'
+                ? 'unknown'
+                : 'inactive';
+
+            return `
+                <div class="service-card ${statusClass}">
+                    <div class="service-header">
+                        <div class="service-title">
+                            <h2 class="service-name">${service.name}</h2>
+                            <div class="service-status status-${statusClass}">
+                                ${service.state}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="service-stats">
+                        <div class="stat-item">
+                            <div class="stat-label">Uptime</div>
+                            <div class="stat-value ${service.uptime !== 'N/A' ? 'highlight' : ''}">${service.uptime || 'N/A'}</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Memory</div>
+                            <div class="stat-value">${service.memory || 'N/A'}</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">PID</div>
+                            <div class="stat-value">${service.main_pid || 'N/A'}</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Load State</div>
+                            <div class="stat-value">${service.load_state || 'N/A'}</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Unit State</div>
+                            <div class="stat-value">${service.unit_file_state || 'N/A'}</div>
+                        </div>
+                    </div>
+                    
+                    <div class="service-actions">
+                        <div class="action-group">
+                            <button class="btn btn-start" onclick="controlService('${service.name}', 'start')" title="Start service">
+                                ▶ Start
+                            </button>
+                            <button class="btn btn-stop" onclick="controlService('${service.name}', 'stop')" title="Stop service">
+                                ⏹ Stop
+                            </button>
+                            <button class="btn btn-restart" onclick="controlService('${service.name}', 'restart')" title="Restart service">
+                                ↻ Restart
+                            </button>
+                        </div>
+                        <div class="action-group">
+                            <button class="btn btn-outline" onclick="toggleLogs('${service.name}')" title="Toggle recent logs">
+                                ◉ Logs
+                            </button>
+                            <button class="btn btn-outline" onclick="showFullJournal('${service.name}')" title="View full journal">
+                                ◈ Journal
+                            </button>
+                        </div>
+                        <div class="action-group">
+                            <button class="btn btn-danger-outline" onclick="removeService('${service.name}')" title="Stop tracking this service">
+                                × Stop tracking
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div id="logs-${service.name}" class="logs-container" style="display: ${isLogsExpanded ? 'block' : 'none'};"></div>
+                </div>
+                `;
+          })
+          .join('');
+
+        loading.style.display = 'none';
+
+        services.forEach((service) => {
+          const isLogsExpanded = toggleStates[service.name]?.logs || false;
+          if (isLogsExpanded) {
+            loadLogsForService(service.name);
+          }
+        });
+      }
+
+      function renderDiskUsage() {
+        const container = document.getElementById('disk-usage-container');
+
+        if (diskUsage.error) {
+          container.innerHTML = `<div style="text-align: center; color: #ef4444; font-size: 12px;">Error: ${diskUsage.error}</div>`;
+          return;
+        }
+
+        if (!diskUsage.disks || diskUsage.disks.length === 0) {
+          container.innerHTML =
+            '<div style="text-align: center; color: #64748b; font-size: 12px;">No disk usage data available</div>';
+          return;
+        }
+
+        container.innerHTML = diskUsage.disks
+          .map((disk) => {
+            const usagePercent = disk.use_percent_num || 0;
+            let usageClass = 'usage-low';
+            if (usagePercent >= 90) usageClass = 'usage-critical';
+            else if (usagePercent >= 80) usageClass = 'usage-high';
+            else if (usagePercent >= 60) usageClass = 'usage-medium';
+
+            return `
+                <div class="disk-item">
+                    <div class="disk-info">
+                        <div class="disk-path" title="${disk.filesystem}">${disk.mounted_on}</div>
+                        <div class="disk-usage-compact">${disk.used}/${disk.size} (${disk.use_percent}%)</div>
+                    </div>
+                    <div class="disk-usage-bar">
+                        <div class="disk-usage-fill ${usageClass}" style="width: ${usagePercent}%"></div>
+                    </div>
+                </div>
+                `;
+          })
+          .join('');
+      }
+
+      function formatLogEntry(logEntry) {
+        if (typeof logEntry === 'string') {
+          return formatLegacyLogEntry(logEntry);
+        }
+
+        if (!logEntry || typeof logEntry !== 'object') {
+          return `<div class="log-line">${JSON.stringify(logEntry)}</div>`;
+        }
+
+        const timestamp = logEntry.__REALTIME_TIMESTAMP || logEntry._SOURCE_REALTIME_TIMESTAMP || logEntry.__CURSOR;
+        const message = logEntry.MESSAGE || '';
+        const unit = logEntry._SYSTEMD_UNIT || logEntry.UNIT || '';
+        const pid = logEntry._PID || '';
+        const priority = parseInt(logEntry.PRIORITY || '6');
+        const hostname = logEntry._HOSTNAME || '';
+
+        let formattedDate = '──:──:──';
+        if (timestamp) {
+          try {
+            let date;
+            if (typeof timestamp === 'string' && timestamp.length > 10) {
+              const microseconds = parseInt(timestamp);
+              date = new Date(microseconds / 1000);
+            } else {
+              date = new Date(parseInt(timestamp) * 1000);
+            }
+            
+            if (!isNaN(date.getTime())) {
+              const now = new Date();
+              const isToday = date.toDateString() === now.toDateString();
+              
+              if (isToday) {
+                formattedDate = date.toLocaleTimeString('en-US', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  second: '2-digit',
+                  hour12: false,
+                });
+              } else {
+                formattedDate = date.toLocaleDateString('en-US', {
+                  month: '2-digit',
+                  day: '2-digit',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: false,
+                });
+              }
+            }
+          } catch (e) {
+            console.warn('Error parsing timestamp:', timestamp, e);
+          }
+        }
+
+        let levelClass = 'log-info';
+        let messageColor = '#e2e8f0';
+        let priorityLabel = '';
+
+        switch (priority) {
+          case 0:
+          case 1:
+          case 2:
+          case 3:
+            levelClass = 'log-error';
+            messageColor = '#fca5a5';
+            priorityLabel = 'ERR';
+            break;
+          case 4:
+            levelClass = 'log-warning';
+            messageColor = '#fbbf24';
+            priorityLabel = 'WARN';
+            break;
+          case 5:
+            levelClass = 'log-notice';
+            messageColor = '#60a5fa';
+            priorityLabel = 'NOTE';
+            break;
+          case 6:
+            levelClass = 'log-info';
+            messageColor = '#e2e8f0';
+            priorityLabel = 'INFO';
+            break;
+          case 7:
+            levelClass = 'log-debug';
+            messageColor = '#a78bfa';
+            priorityLabel = 'DBG';
+            break;
+          default:
+            levelClass = 'log-info';
+            messageColor = '#e2e8f0';
+            priorityLabel = 'INFO';
+        }
+
+        const lowerMessage = message.toLowerCase();
+        if (
+          lowerMessage.includes('error') ||
+          lowerMessage.includes('failed') ||
+          lowerMessage.includes('fatal') ||
+          lowerMessage.includes('denied')
+        ) {
+          levelClass = 'log-error';
+          messageColor = '#fca5a5';
+        } else if (
+          lowerMessage.includes('warning') ||
+          lowerMessage.includes('warn')
+        ) {
+          levelClass = 'log-warning';
+          messageColor = '#fbbf24';
+        } else if (
+          lowerMessage.includes('started') ||
+          lowerMessage.includes('success') ||
+          lowerMessage.includes('completed') ||
+          lowerMessage.includes('connected')
+        ) {
+          levelClass = 'log-success';
+          messageColor = '#86efac';
+        }
+
+        const unitName = unit.replace('.service', '');
+        const pidDisplay = pid ? `[${pid}]` : '';
+
+        const escapedMessage = message.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        
+        return `<div class="log-line ${levelClass}"><span class="log-timestamp">${formattedDate}</span><span class="log-priority">${priorityLabel}</span><span class="log-service">${unitName}${pidDisplay}</span><span class="log-message" style="color: ${messageColor};">${escapedMessage}</span></div>`;
+      }
+
+      function formatLegacyLogEntry(logLine) {
+        const logPattern =
+          /^(\w{3,4}\.?\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})\s+(\S+)\s+(\S+?)(\[\d+\])?:\s*(.*)$/;
+        const match = logLine.match(logPattern);
+
+        if (!match) {
+          return `<div class="log-line">${logLine}</div>`;
+        }
+
+        const [, dateStr, hostname, service, pid, message] = match;
+
+        let formattedDate = dateStr;
+        try {
+          const currentYear = new Date().getFullYear();
+          const cleanDateStr = dateStr.replace(/\.$/, '');
+          const date = new Date(cleanDateStr + ' ' + currentYear);
+          if (!isNaN(date.getTime())) {
+            const now = new Date();
+            const isToday = date.toDateString() === now.toDateString();
+            
+            if (isToday) {
+              formattedDate = date.toLocaleTimeString('en-US', {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false,
+              });
+            } else {
+              formattedDate = date.toLocaleDateString('en-US', {
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false,
+              });
+            }
+          }
+        } catch (e) {
+          console.warn('Error parsing legacy date:', dateStr, e);
+        }
+
+        let messageColor = '#e2e8f0';
+        let levelClass = 'log-info';
+
+        const lowerMessage = message.toLowerCase();
+        if (
+          lowerMessage.includes('error') ||
+          lowerMessage.includes('failed') ||
+          lowerMessage.includes('fatal') ||
+          lowerMessage.includes('denied')
+        ) {
+          messageColor = '#fca5a5';
+          levelClass = 'log-error';
+        } else if (
+          lowerMessage.includes('warning') ||
+          lowerMessage.includes('warn')
+        ) {
+          messageColor = '#fbbf24';
+          levelClass = 'log-warning';
+        } else if (
+          lowerMessage.includes('started') ||
+          lowerMessage.includes('success') ||
+          lowerMessage.includes('completed') ||
+          lowerMessage.includes('connected')
+        ) {
+          messageColor = '#86efac';
+          levelClass = 'log-success';
+        } else if (lowerMessage.includes('debug')) {
+          messageColor = '#a78bfa';
+          levelClass = 'log-debug';
+        }
+
+        const escapedMessage = message.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        
+        return `<div class="log-line ${levelClass}"><span class="log-timestamp">${formattedDate}</span><span class="log-service">${service}${pid || ''}</span><span class="log-message" style="color: ${messageColor};">${escapedMessage}</span></div>`;
+      }
+
+      async function toggleLogs(serviceName) {
+        const logsContainer = document.getElementById(`logs-${serviceName}`);
+        const isExpanded = logsContainer.style.display !== 'none';
+
+        if (isExpanded) {
+          logsContainer.style.display = 'none';
+          await fetch(`/api/services/${serviceName}/toggle`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ toggle_type: 'logs', is_expanded: false }),
+          });
+        } else {
+          logsContainer.style.display = 'block';
+          await loadLogsForService(serviceName);
+          await fetch(`/api/services/${serviceName}/toggle`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ toggle_type: 'logs', is_expanded: true }),
+          });
+        }
+      }
+
+      async function loadLogsForService(serviceName) {
+        const logsContainer = document.getElementById(`logs-${serviceName}`);
+        try {
+          const response = await fetch(`/api/services/${serviceName}/logs`);
+          const data = await response.json();
+
+          if (data.logs) {
+            let formattedLogs = '';
+            
+            if (Array.isArray(data.logs)) {
+              if (data.logs.length === 0) {
+                formattedLogs = '<div class="log-line log-info"><span class="log-message">No recent logs available</span></div>';
+              } else {
+                formattedLogs = data.logs
+                  .map((logEntry) => formatLogEntry(logEntry))
+                  .join('');
+              }
+            } else if (typeof data.logs === 'string') {
+              const logLines = data.logs
+                .split('\n')
+                .filter((line) => line.trim());
+              formattedLogs = logLines
+                .map((line) => formatLogEntry(line))
+                .join('');
+            }
+            
+            if (formattedLogs) {
+              logsContainer.innerHTML = formattedLogs;
+            } else {
+              logsContainer.innerHTML = '<div class="log-line">No logs available</div>';
+            }
+          } else {
+            logsContainer.innerHTML =
+              '<div class="log-line">No logs available</div>';
+          }
+        } catch (error) {
+          logsContainer.innerHTML = `<div class="log-line log-error">Error loading logs: ${error.message}</div>`;
+        }
+      }
+
+      async function showFullJournal(serviceName) {
+        const modal = document.getElementById('journal-modal');
+        const content = document.getElementById('journal-content');
+        const title = document.getElementById('journal-title');
+
+        title.textContent = `Full Journal - ${serviceName}`;
+        content.innerHTML = '<div class="log-line">Loading journal...</div>';
+        modal.style.display = 'flex';
+
+        try {
+          const response = await fetch(`/api/services/${serviceName}/journal`);
+          const data = await response.json();
+
+          if (data.journal) {
+            let formattedLogs = '';
+            
+            if (Array.isArray(data.journal)) {
+              if (data.journal.length === 0) {
+                formattedLogs = '<div class="log-line log-info"><span class="log-message">No journal entries available</span></div>';
+              } else {
+                formattedLogs = data.journal
+                  .map((logEntry) => formatLogEntry(logEntry))
+                  .join('');
+              }
+            } else if (typeof data.journal === 'string') {
+              const logLines = data.journal
+                .split('\n')
+                .filter((line) => line.trim());
+              formattedLogs = logLines
+                .map((line) => formatLogEntry(line))
+                .join('');
+            }
+            
+            if (formattedLogs) {
+              content.innerHTML = formattedLogs;
+            } else {
+              content.innerHTML = '<div class="log-line">No journal entries available</div>';
+            }
+          } else {
+            content.innerHTML =
+              '<div class="log-line">No journal entries available</div>';
+          }
+        } catch (error) {
+          content.innerHTML = `<div class="log-line log-error">Error loading journal: ${error.message}</div>`;
+        }
+      }
+
+      function closeJournalModal() {
+        document.getElementById('journal-modal').style.display = 'none';
+      }
+
+      function scrollJournalToTop() {
+        const content = document.getElementById('journal-content');
+        content.scrollTop = 0;
+      }
+
+      function scrollJournalToBottom() {
+        const content = document.getElementById('journal-content');
+        content.scrollTop = content.scrollHeight;
+      }
+
+      async function controlService(serviceName, action) {
+        try {
+          const response = await fetch(`/api/services/${serviceName}/control`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action }),
+          });
+          const result = await response.json();
+
+          if (result.success) {
+            setTimeout(() => loadServices(), 1000);
+          } else {
+            alert(`Failed to ${action} service: ${result.message}`);
+          }
+        } catch (error) {
+          alert(`Error controlling service: ${error.message}`);
+        }
+      }
+
+      async function addService() {
+        const serviceName = document.getElementById('new-service').value.trim();
+        if (!serviceName) {
+          alert('Please enter a service name');
+          return;
+        }
+
+        try {
+          const response = await fetch('/api/services', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ service_name: serviceName }),
+          });
+          const result = await response.json();
+
+          if (result.success) {
+            document.getElementById('new-service').value = '';
+            loadServices();
+          } else {
+            alert(`Failed to add service: ${result.message}`);
+          }
+        } catch (error) {
+          alert(`Error adding service: ${error.message}`);
+        }
+      }
+
+      async function removeService(serviceName) {
+        try {
+          const response = await fetch(`/api/services/${serviceName}`, {
+            method: 'DELETE',
+          });
+          const result = await response.json();
+
+          if (result.success) {
+            loadServices();
+          } else {
+            alert(`Failed to remove service: ${result.message}`);
+          }
+        } catch (error) {
+          alert(`Error removing service: ${error.message}`);
+        }
+      }
+
+      loadServices();
+      setInterval(loadServices, 30000);
+    </script>
+  </body>
+</html>
