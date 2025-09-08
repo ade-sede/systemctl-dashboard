@@ -214,12 +214,12 @@ class SystemdDashboard:
             )
             return {
                 "success": result.returncode == 0,
-                "output": result.stdout + result.stderr,
+                "message": result.stdout + result.stderr,
             }
         except subprocess.TimeoutExpired:
-            return {"success": False, "output": "Operation timed out"}
+            return {"success": False, "message": "Operation timed out"}
         except Exception as e:
-            return {"success": False, "output": f"Error: {e!s}"}
+            return {"success": False, "message": f"Error: {e!s}"}
 
     def get_service_logs(self, service_name, lines=50):
         try:
@@ -343,41 +343,75 @@ class SystemdDashboard:
             result = subprocess.run(
                 ["free", "-h"], capture_output=True, text=True, timeout=10
             )
-            if result.returncode != 0:
-                return {"error": "Failed to get RAM usage"}
+            if result.returncode == 0:
+                lines = result.stdout.strip().split("\n")
+                if len(lines) >= 2:
+                    mem_line = lines[1].split()
+                    if len(mem_line) >= 7:
+                        total = mem_line[1]
+                        used = mem_line[2]
+                        free = mem_line[3]
+                        available = mem_line[6]
 
-            lines = result.stdout.strip().split("\n")
-            if len(lines) < 2:
-                return {"error": "Invalid free output"}
+                        try:
+                            total_kb = self._parse_memory_value(total)
+                            used_kb = self._parse_memory_value(used)
+                            use_percent = int((used_kb / total_kb) * 100) if total_kb > 0 else 0
+                        except (ValueError, ZeroDivisionError):
+                            use_percent = 0
 
-            mem_line = lines[1].split()
-            if len(mem_line) < 7:
-                return {"error": "Invalid memory line format"}
+                        return {
+                            "total": total,
+                            "used": used,
+                            "free": free,
+                            "available": available,
+                            "use_percent": use_percent,
+                        }
 
-            total = mem_line[1]
-            used = mem_line[2]
-            free = mem_line[3]
-            available = mem_line[6]
+        except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.SubprocessError):
+            pass
 
-            try:
-                total_kb = self._parse_memory_value(total)
-                used_kb = self._parse_memory_value(used)
-                use_percent = int((used_kb / total_kb) * 100) if total_kb > 0 else 0
-            except (ValueError, ZeroDivisionError):
-                use_percent = 0
+        # Fallback to /proc/meminfo if free command fails or is not available
+        try:
+            with open('/proc/meminfo', 'r') as f:
+                meminfo = f.read()
+            
+            mem_data = {}
+            for line in meminfo.split('\n'):
+                if ':' in line:
+                    key, value = line.split(':', 1)
+                    # Extract numeric value in kB
+                    value_parts = value.strip().split()
+                    if value_parts and value_parts[0].isdigit():
+                        mem_data[key.strip()] = int(value_parts[0]) * 1024  # Convert kB to bytes
 
-            return {
-                "total": total,
-                "used": used,
-                "free": free,
-                "available": available,
-                "use_percent": use_percent,
-            }
+            if 'MemTotal' in mem_data:
+                total_bytes = mem_data.get('MemTotal', 0)
+                available_bytes = mem_data.get('MemAvailable', mem_data.get('MemFree', 0))
+                free_bytes = mem_data.get('MemFree', 0)
+                used_bytes = total_bytes - available_bytes
 
-        except subprocess.TimeoutExpired:
-            return {"error": "RAM usage check timed out"}
+                total_formatted = self._format_bytes(total_bytes)
+                used_formatted = self._format_bytes(used_bytes)
+                free_formatted = self._format_bytes(free_bytes)
+                available_formatted = self._format_bytes(available_bytes)
+
+                use_percent = int((used_bytes / total_bytes) * 100) if total_bytes > 0 else 0
+
+                return {
+                    "total": total_formatted,
+                    "used": used_formatted,
+                    "free": free_formatted,
+                    "available": available_formatted,
+                    "use_percent": use_percent,
+                }
+
+        except (IOError, OSError) as e:
+            return {"error": f"Error reading memory info: {e!s}"}
         except Exception as e:
             return {"error": f"Error getting RAM usage: {e!s}"}
+        
+        return {"error": "Unable to determine RAM usage"}
 
     def _parse_memory_value(self, value):
         if value.endswith('T'):
@@ -390,6 +424,16 @@ class SystemdDashboard:
             return float(value[:-1])
         else:
             return float(value) / 1024
+
+    def _format_memory_kb(self, kb_value):
+        if kb_value >= 1024 * 1024 * 1024:
+            return f"{kb_value / (1024 * 1024 * 1024):.1f}T"
+        elif kb_value >= 1024 * 1024:
+            return f"{kb_value / (1024 * 1024):.1f}G"
+        elif kb_value >= 1024:
+            return f"{kb_value / 1024:.1f}M"
+        else:
+            return f"{kb_value:.1f}K"
 
     def get_full_journal(self, service_name):
         try:
