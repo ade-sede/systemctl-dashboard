@@ -205,6 +205,29 @@ class SystemdDashboard:
             return "N/A"
 
     def control_service(self, service_name, action):
+        # Try without sudo first (for containers/systems running as root)
+        try:
+            result = subprocess.run(
+                ["systemctl", action, service_name],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if result.returncode == 0:
+                return {
+                    "success": True,
+                    "message": result.stdout + result.stderr,
+                }
+            # If systemctl failed, save the error for potential fallback
+            direct_error = result.stdout + result.stderr
+        except subprocess.TimeoutExpired:
+            return {"success": False, "message": "Operation timed out"}
+        except FileNotFoundError:
+            return {"success": False, "message": "systemctl command not found"}
+        except Exception as e:
+            direct_error = f"Error: {e!s}"
+
+        # Try with sudo if direct systemctl failed
         try:
             result = subprocess.run(
                 ["sudo", "systemctl", action, service_name],
@@ -218,6 +241,9 @@ class SystemdDashboard:
             }
         except subprocess.TimeoutExpired:
             return {"success": False, "message": "Operation timed out"}
+        except FileNotFoundError:
+            # sudo not available, return the original systemctl error
+            return {"success": False, "message": f"Permission denied. Original error: {direct_error}"}
         except Exception as e:
             return {"success": False, "message": f"Error: {e!s}"}
 
