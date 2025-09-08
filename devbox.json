@@ -2,6 +2,8 @@
   "$schema": "https://raw.githubusercontent.com/jetify-com/devbox/0.14.0/.schema/devbox.schema.json",
   "packages": [
     "python311",
+    "python313Packages.python-lsp-server",
+    "pyright"
   ],
   "shell": {
     "init_hook": [

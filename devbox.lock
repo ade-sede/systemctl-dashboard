@@ -4,9 +4,17 @@
     "github:NixOS/nixpkgs/nixpkgs-unstable": {
       "resolved": "github:NixOS/nixpkgs/c6a788f552b7b7af703b1a29802a7233c0067908?lastModified=1756911493&narHash=sha256-6n%2Fn1GZQ%2Fvi%2BLhFXMSyoseKdNfc2QQaSBXJdgamrbkE%3D"
     },
+    "pyright": {
+      "resolved": "github:NixOS/nixpkgs/c6a788f552b7b7af703b1a29802a7233c0067908?narHash=sha256-6n%2Fn1GZQ%2Fvi%2BLhFXMSyoseKdNfc2QQaSBXJdgamrbkE%3D#pyright",
+      "source": "nixpkg"
+    },
     "python311": {
       "plugin_version": "0.0.4",
       "resolved": "github:NixOS/nixpkgs/c6a788f552b7b7af703b1a29802a7233c0067908?narHash=sha256-6n%2Fn1GZQ%2Fvi%2BLhFXMSyoseKdNfc2QQaSBXJdgamrbkE%3D#python311",
+      "source": "nixpkg"
+    },
+    "python313Packages.python-lsp-server": {
+      "resolved": "github:NixOS/nixpkgs/c6a788f552b7b7af703b1a29802a7233c0067908?narHash=sha256-6n%2Fn1GZQ%2Fvi%2BLhFXMSyoseKdNfc2QQaSBXJdgamrbkE%3D#python313Packages.python-lsp-server",
       "source": "nixpkg"
     }
   }

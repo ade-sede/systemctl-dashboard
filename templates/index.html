@@ -52,6 +52,27 @@
         border-left-color: #6b7280;
       }
 
+      .services-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+
+      .services-grid .service-card {
+        margin: 0;
+      }
+
+      /* Auto-apply grid view based on service count */
+      .services-auto-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+
+      .services-auto-grid .service-card {
+        margin: 0;
+      }
+
       .service-header {
         padding: 16px 20px 12px;
         border-bottom: 1px solid #f1f5f9;
@@ -444,16 +465,24 @@
         border: none;
       }
 
-      .disk-usage-card {
+      .system-metrics-row {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+        margin-bottom: 20px;
+      }
+      .metrics-card {
         background: white;
         border: none;
         border-left: 4px solid #3b82f6;
         border-radius: 8px;
-        margin-bottom: 20px;
         padding: 16px 20px;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
       }
-      .disk-usage-title {
+      .ram-card {
+        border-left-color: #10b981;
+      }
+      .metrics-title {
         font-size: 14px;
         font-weight: 700;
         color: #1e293b;
@@ -466,8 +495,8 @@
       }
       .disk-item {
         display: flex;
-        align-items: center;
-        gap: 12px;
+        flex-direction: column;
+        gap: 8px;
       }
       .disk-info {
         flex: 1;
@@ -481,17 +510,19 @@
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+        text-align: center;
       }
       .disk-usage-compact {
         font-size: 11px;
         color: #64748b;
         margin-top: 2px;
+        text-align: center;
       }
       .disk-usage-bar {
-        width: 60px;
-        height: 6px;
+        width: 100%;
+        height: 8px;
         background: #f1f5f9;
-        border-radius: 3px;
+        border-radius: 4px;
         overflow: hidden;
         flex-shrink: 0;
       }
@@ -531,6 +562,9 @@
         .disk-grid {
           grid-template-columns: 1fr;
         }
+        .system-metrics-row {
+          grid-template-columns: 1fr;
+        }
       }
     </style>
   </head>
@@ -538,11 +572,21 @@
     <div class="container">
       <h1>Systemd Dashboard</h1>
 
-      <div class="disk-usage-card">
-        <h3 class="disk-usage-title">💾 Disk Usage</h3>
-        <div id="disk-usage-container" class="disk-grid">
-          <div style="text-align: center; color: #64748b; font-size: 12px">
-            Loading...
+      <div class="system-metrics-row">
+        <div class="metrics-card">
+          <h3 class="metrics-title">💾 Disk Usage</h3>
+          <div id="disk-usage-container" class="disk-grid">
+            <div style="text-align: center; color: #64748b; font-size: 12px">
+              Loading...
+            </div>
+          </div>
+        </div>
+        <div class="metrics-card ram-card">
+          <h3 class="metrics-title">🧠 RAM Usage</h3>
+          <div id="ram-usage-container">
+            <div style="text-align: center; color: #64748b; font-size: 12px">
+              Loading...
+            </div>
           </div>
         </div>
       </div>
@@ -598,20 +642,24 @@
       let services = [];
       let toggleStates = {};
       let diskUsage = [];
+      let ramUsage = {};
 
       async function loadServices() {
         try {
-          const [servicesResponse, toggleResponse, diskResponse] =
+          const [servicesResponse, toggleResponse, diskResponse, ramResponse] =
             await Promise.all([
               fetch('./api/services'),
               fetch('./api/toggle-states'),
               fetch('./api/disk-usage'),
+              fetch('./api/ram-usage'),
             ]);
           services = await servicesResponse.json();
           toggleStates = await toggleResponse.json();
           diskUsage = await diskResponse.json();
+          ramUsage = await ramResponse.json();
           renderServices();
           renderDiskUsage();
+          renderRamUsage();
         } catch (error) {
           console.error('Error loading data:', error);
           document.getElementById('loading').innerHTML = 'Error loading data';
@@ -627,6 +675,13 @@
             '<div style="text-align: center; padding: 40px; color: #64748b;"><h3>No services tracked yet</h3><p>Add a service above to get started</p></div>';
           loading.style.display = 'none';
           return;
+        }
+
+        // Auto-switch to grid view if there are more than 3 services
+        if (services.length > 3) {
+          container.className = 'services-auto-grid';
+        } else {
+          container.className = '';
         }
 
         container.innerHTML = services
@@ -750,6 +805,40 @@
                 `;
           })
           .join('');
+      }
+
+      function renderRamUsage() {
+        const container = document.getElementById('ram-usage-container');
+
+        if (ramUsage.error) {
+          container.innerHTML = `<div style="text-align: center; color: #ef4444; font-size: 12px;">Error: ${ramUsage.error}</div>`;
+          return;
+        }
+
+        if (!ramUsage.total) {
+          container.innerHTML =
+            '<div style="text-align: center; color: #64748b; font-size: 12px;">No RAM usage data available</div>';
+          return;
+        }
+
+        const usagePercent = ramUsage.use_percent || 0;
+        let usageClass = 'usage-low';
+        if (usagePercent >= 90) usageClass = 'usage-critical';
+        else if (usagePercent >= 80) usageClass = 'usage-high';
+        else if (usagePercent >= 60) usageClass = 'usage-medium';
+
+        container.innerHTML = `
+          <div class="disk-item">
+            <div class="disk-info">
+              <div class="disk-path">System Memory</div>
+              <div class="disk-usage-compact">${ramUsage.used}/${ramUsage.total} (${usagePercent}%)</div>
+              <div class="disk-usage-compact">Available: ${ramUsage.available}</div>
+            </div>
+            <div class="disk-usage-bar">
+              <div class="disk-usage-fill ${usageClass}" style="width: ${usagePercent}%"></div>
+            </div>
+          </div>
+        `;
       }
 
       function formatLogEntry(logEntry) {

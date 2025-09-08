@@ -330,12 +330,66 @@ class SystemdDashboard:
                         }
                     )
 
+            disk_usage.sort(key=lambda x: x["use_percent_num"], reverse=True)
             return {"disks": disk_usage}
 
         except subprocess.TimeoutExpired:
             return {"error": "Disk usage check timed out"}
         except Exception as e:
             return {"error": f"Error getting disk usage: {e!s}"}
+
+    def get_ram_usage(self):
+        try:
+            result = subprocess.run(
+                ["free", "-h"], capture_output=True, text=True, timeout=10
+            )
+            if result.returncode != 0:
+                return {"error": "Failed to get RAM usage"}
+
+            lines = result.stdout.strip().split("\n")
+            if len(lines) < 2:
+                return {"error": "Invalid free output"}
+
+            mem_line = lines[1].split()
+            if len(mem_line) < 7:
+                return {"error": "Invalid memory line format"}
+
+            total = mem_line[1]
+            used = mem_line[2]
+            free = mem_line[3]
+            available = mem_line[6]
+
+            try:
+                total_kb = self._parse_memory_value(total)
+                used_kb = self._parse_memory_value(used)
+                use_percent = int((used_kb / total_kb) * 100) if total_kb > 0 else 0
+            except (ValueError, ZeroDivisionError):
+                use_percent = 0
+
+            return {
+                "total": total,
+                "used": used,
+                "free": free,
+                "available": available,
+                "use_percent": use_percent,
+            }
+
+        except subprocess.TimeoutExpired:
+            return {"error": "RAM usage check timed out"}
+        except Exception as e:
+            return {"error": f"Error getting RAM usage: {e!s}"}
+
+    def _parse_memory_value(self, value):
+        if value.endswith('T'):
+            return float(value[:-1]) * 1024 * 1024 * 1024
+        elif value.endswith('G'):
+            return float(value[:-1]) * 1024 * 1024
+        elif value.endswith('M'):
+            return float(value[:-1]) * 1024
+        elif value.endswith('K'):
+            return float(value[:-1])
+        else:
+            return float(value) / 1024
 
     def get_full_journal(self, service_name):
         try:
@@ -395,6 +449,8 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
             self._handle_get_toggle_states()
         elif path == "/api/disk-usage":
             self._handle_get_disk_usage()
+        elif path == "/api/ram-usage":
+            self._handle_get_ram_usage()
         else:
             self._send_error(404, "Not Found")
 
@@ -545,6 +601,10 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
     def _handle_get_disk_usage(self):
         disk_usage = self.dashboard.get_disk_usage()
         self._send_json_response(disk_usage)
+
+    def _handle_get_ram_usage(self):
+        ram_usage = self.dashboard.get_ram_usage()
+        self._send_json_response(ram_usage)
 
     def do_OPTIONS(self):
         self.send_response(200)
